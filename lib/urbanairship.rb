@@ -25,6 +25,15 @@ module Urbanairship
       do_request(:delete, "/api/device_tokens/#{device_token}", :authenticate_with => :application_secret)
     end
 
+    def register_apid(apid, options = {})
+      body = parse_register_options(options).to_json
+      do_request(:put, "/api/apids/#{apid}", :body => body, :authenticate_with => :application_secret)
+    end
+
+    def unregister_apid(apid)
+      do_request(:delete, "/api/apids/#{apid}", :authenticate_with => :application_secret)
+    end
+
     def delete_scheduled_push(param)
       path = param.is_a?(Hash) ? "/api/push/scheduled/alias/#{param[:alias].to_s}" : "/api/push/scheduled/#{param.to_s}"
       do_request(:delete, path, :authenticate_with => :master_secret)

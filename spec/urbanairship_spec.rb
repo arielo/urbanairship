@@ -12,6 +12,16 @@ describe Urbanairship do
     FakeWeb.register_uri(:delete, /my_app_key\:my_app_secret\@go\.urbanairship.com\/api\/device_tokens\/.+/, :status => ["204", "No Content"])
     FakeWeb.register_uri(:delete, /bad_key\:my_app_secret\@go\.urbanairship.com\/api\/device_tokens\/.+/, :status => ["401", "Unauthorized"])
 
+    # register_apid
+    FakeWeb.register_uri(:put, "https://my_app_key:my_app_secret@go.urbanairship.com/api/apids/new_device_token", :status => ["201", "Created"])
+    FakeWeb.register_uri(:put, "https://my_app_key:my_app_secret@go.urbanairship.com/api/apids/existing_device_token", :status => ["200", "OK"])
+    FakeWeb.register_uri(:put, "https://my_app_key:my_app_secret@go.urbanairship.com/api/apids/device_token_one", :status => ["201", "Created"])
+    FakeWeb.register_uri(:put, /bad_key\:my_app_secret\@go\.urbanairship\.com/, :status => ["401", "Unauthorized"])
+
+    # unregister_device
+    FakeWeb.register_uri(:delete, /my_app_key\:my_app_secret\@go\.urbanairship.com\/api\/apids\/.+/, :status => ["204", "No Content"])
+    FakeWeb.register_uri(:delete, /bad_key\:my_app_secret\@go\.urbanairship.com\/api\/apids\/.+/, :status => ["401", "Unauthorized"])
+
     # push
     FakeWeb.register_uri(:post, "https://my_app_key:my_master_secret@go.urbanairship.com/api/push/", :status => ["200", "OK"])
     FakeWeb.register_uri(:post, "https://my_app_key2:my_master_secret2@go.urbanairship.com/api/push/", :status => ["400", "Bad Request"])
@@ -144,6 +154,97 @@ describe Urbanairship do
       Urbanairship.unregister_device("key_to_delete").success?.should == false
     end
   end
+
+  describe "::register_apid" do
+    before(:each) do
+      @valid_params = {:alias => 'one'}
+      Urbanairship.application_key = "my_app_key"
+      Urbanairship.application_secret = "my_app_secret"
+    end
+
+    it "raises an error if call is made without an app key and secret configured" do
+      Urbanairship.application_key = nil
+      Urbanairship.application_secret = nil
+
+      lambda {
+        Urbanairship.register_apid("asdf1234")
+      }.should raise_error(RuntimeError, "Must configure application_key, application_secret before making this request.")
+    end
+
+    it "uses app key and secret to sign the request" do
+      Urbanairship.register_apid("new_device_token")
+      FakeWeb.last_request['authorization'].should == "Basic #{Base64::encode64('my_app_key:my_app_secret').chomp}"
+    end
+
+    it "takes and sends a device token" do
+      Urbanairship.register_apid("new_device_token")
+      FakeWeb.last_request.path.should == "/api/apids/new_device_token"
+    end
+
+    it "returns true when the device is registered for the first time" do
+      Urbanairship.register_apid("new_device_token").success?.should == true
+    end
+
+    it "returns true when the device is registered again" do
+      Urbanairship.register_apid("existing_device_token").success?.should == true
+    end
+
+    it "returns false when the authorization is invalid" do
+      Urbanairship.application_key = "bad_key"
+      Urbanairship.register_device("new_device_token").success?.should == false
+    end
+
+    it "accepts an alias" do
+      Urbanairship.register_apid("device_token_one", @valid_params).success?.should == true
+    end
+
+    it "adds alias to the JSON payload" do
+      Urbanairship.register_apid("device_token_one", @valid_params)
+      request_json['alias'].should == "one"
+    end
+
+    it "converts alias param to string" do
+      Urbanairship.register_apid("device_token_one", :alias => 11)
+      request_json['alias'].should be_a_kind_of String
+    end
+  end
+
+  describe "::unregister_apid" do
+    before(:each) do
+      Urbanairship.application_key = "my_app_key"
+      Urbanairship.application_secret = "my_app_secret"
+    end
+
+    it "raises an error if call is made without an app key and secret configured" do
+      Urbanairship.application_key = nil
+      Urbanairship.application_secret = nil
+
+      lambda {
+        Urbanairship.unregister_apid("asdf1234")
+      }.should raise_error(RuntimeError, "Must configure application_key, application_secret before making this request.")
+    end
+
+    it "uses app key and secret to sign the request" do
+      Urbanairship.unregister_apid("key_to_delete")
+      FakeWeb.last_request['authorization'].should == "Basic #{Base64::encode64('my_app_key:my_app_secret').chomp}"
+    end
+
+    it "sends the key that needs to be deleted" do
+      Urbanairship.unregister_apid("key_to_delete")
+      FakeWeb.last_request.path.should == "/api/apids/key_to_delete"
+    end
+
+    it "returns true when the device is successfully unregistered" do
+      Urbanairship.unregister_apid("key_to_delete").success?.should == true
+      FakeWeb.last_request.body.should be_nil
+    end
+
+    it "returns false when the authorization is invalid" do
+      Urbanairship.application_key = "bad_key"
+      Urbanairship.unregister_apid("key_to_delete").success?.should == false
+    end
+  end
+
 
   describe "::delete_scheduled_push" do
     before(:each) do
